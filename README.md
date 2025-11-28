@@ -1,22 +1,24 @@
 # sentinel
 
-minimal windows kernel driver and usermode controller proof-of-concept.
+a minimal windows kernel driver and usermode controller proof-of-concept.
 
-this project demonstrates basic communication between ring 3 (usermode) and ring 0 (kernel mode) using ioctls, as well as process creation monitoring
+this project demonstrates basic communication between ring 3 (usermode) and ring 0 (kernel mode) using ioctls, as well as process creation monitoring with blocking capabilities.
 
 ## structure
 
-- **sentinel/**: the kernel driver source (`.sys`). handles irps and registers process notify routines.
-- **sentinelusermode/**: the usermode console app (`.exe`). sends requests to the driver.
+- **sentinel/**: the kernel driver source (`.sys`). handles irps and registers extended process notify routines.
+- **sentinelcontroller/**: the usermode console app (`.exe`). sends requests to the driver.
 
 ## features
 
 - **ioctl communication**: creates a communication channel (`\\.\SentinelDriverLink`) to exchange string messages between user and kernel.
-- **process monitoring**: uses `PsSetCreateProcessNotifyRoutine` to log when processes are created or exited (prints pid and parent pid to debug output).
+- **process blocking**: uses `PsSetCreateProcessNotifyRoutineEx` to intercept process creation.
+  - currently configured to block **notepad.exe** from launching by setting `CreationStatus` to `STATUS_ACCESS_DENIED`.
 
 ## usage
 
 1. **build**: compile the solution in visual studio (ensure you have the wdk installed).
+   - **important**: go to project properties -> linker -> command line and add `/INTEGRITYCHECK` for the driver project, otherwise the extended notify routine will fail to register.
 2. **load driver**: enable test signing or use a mapper.
    ```cmd
    sc create Sentinel type= kernel binPath= "C:\path\to\Sentinel.sys"
