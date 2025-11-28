@@ -4,7 +4,7 @@
 
 
 // defining our custom IOCTL code
-#define IOCTL_SENTINEL CTL_CODE(FILE_DEVICE_UNKNOWN, 0x801, METHOD_BUFFERED, FILE_ANY_ACCESS) // microsoft recommends we can use any code past 0x800.
+#define IOCTL_SENTINEL CTL_CODE(FILE_DEVICE_UNKNOWN, 0x801, METHOD_BUFFERED, FILE_ANY_ACCESS) // microsoft recommends we can use any code past 0x800
 
 int main(int argc, char** argv) {
 	HANDLE device;
@@ -29,7 +29,7 @@ int main(int argc, char** argv) {
 	DWORD bytesReturned;
 
 	printf("[+] Issuing IOCTL_SENTINEL (0x%x). Sending message to kernel mode: %s\n.", IOCTL_SENTINEL, userMessage);
-	BOOL status = DeviceIoControl(device, IOCTL_SENTINEL, userMessage, sizeof(userMessage), kernelMessage, sizeof(kernelMessage), &bytesReturned, NULL); // finally using DeviceIoControl to send our IOCTL to the driver.
+	BOOL status = DeviceIoControl(device, IOCTL_SENTINEL, userMessage, sizeof(userMessage), kernelMessage, sizeof(kernelMessage), &bytesReturned, NULL); // finally using DeviceIoControl to send our IOCTL to the driver
 	printf("[+] IOCTL_SENTINEL (0x%x) completed.\n", IOCTL_SENTINEL);
 	printf("[+] Received message from kernel mode: %s\n.", kernelMessage);
 	printf("[+] Bytes returned: %d\n.", bytesReturned);

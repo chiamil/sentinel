@@ -6,47 +6,40 @@ UNICODE_STRING dev, sym;
 #define IOCTL_SENTINEL CTL_CODE(FILE_DEVICE_UNKNOWN, 0x801, METHOD_BUFFERED, FILE_ANY_ACCESS) // microsoft recommends we can use any code past 0x800.
 
 
-VOID sCreateProcessNotifyRoutine(
-    HANDLE ppid, 
-    HANDLE pid, 
-    BOOLEAN create){
+VOID sCreateProceesNotifyRoutineEx(
+    PEPROCESS				process,
+    HANDLE					pid,
+    PPS_CREATE_NOTIFY_INFO	createInfo
+) {
+    UNREFERENCED_PARAMETER(process);
 
-    if (create) {
-        PEPROCESS process = NULL;
-        PUNICODE_STRING parentProcessName = NULL, processName = NULL;
+    if (createInfo) {
+        DbgPrint("[+] Process created (pid: %i): %wZ\n",
+            pid,
+            createInfo->CommandLine
+        );
 
-		PsLookupProcessByProcessId(ppid, &process);
-		SeLocateProcessImageName(process, &parentProcessName);
-
-		PsLookupProcessByProcessId(pid, &process);
-        SeLocateProcessImageName(process, &processName);
-
-        DbgPrint("[+] Process created: %wZ (PID: %d) | Parent: %wZ (PPID: %d)\n", 
-            processName, 
-            pid, 
-            parentProcessName, 
-            ppid
-		);
+        if (wcsstr(createInfo->CommandLine->Buffer, L"notepad.exe")) {
+            createInfo->CreationStatus = STATUS_ACCESS_DENIED;
+        } 
+        
     }
-    else
-		DbgPrint("[-] Process exited: PID %d | Parent PID: %d\n", pid, ppid);
-
-
- }
-
-
+}
 
 NTSTATUS DriverUnload(
     _In_ PDRIVER_OBJECT driverObject
 ) {
     IoDeleteDevice(driverObject->DeviceObject);
-    PsSetCreateProcessNotifyRoutine(sCreateProcessNotifyRoutine, TRUE);
+	PsSetCreateProcessNotifyRoutineEx(sCreateProceesNotifyRoutineEx, TRUE);
     DbgPrint("Driver unloaded. Goodbye, Driver World!\n");
 
     return STATUS_SUCCESS;
 }
 
-NTSTATUS SentinelCreate(PDEVICE_OBJECT deviceObject, PIRP IRP) {
+NTSTATUS SentinelCreate(
+    _In_ PDEVICE_OBJECT deviceObject,
+    _In_ PIRP           IRP
+) {
     UNREFERENCED_PARAMETER(deviceObject);
     DbgPrint("Handle opened.\n");
 
@@ -56,7 +49,10 @@ NTSTATUS SentinelCreate(PDEVICE_OBJECT deviceObject, PIRP IRP) {
     return STATUS_SUCCESS;
 }
 
-NTSTATUS SentinelClose(PDEVICE_OBJECT deviceObject, PIRP IRP) {
+NTSTATUS SentinelClose(
+    _In_ PDEVICE_OBJECT deviceObject,
+    _In_ PIRP           IRP
+) {
     UNREFERENCED_PARAMETER(deviceObject);
     DbgPrint("Handle closed.\n");
 
@@ -69,7 +65,7 @@ NTSTATUS SentinelClose(PDEVICE_OBJECT deviceObject, PIRP IRP) {
 // defining our custom IOCTL code handler
 NTSTATUS CustomIOCTLHandler(
     _In_ PDEVICE_OBJECT deviceObject, 
-    _In_ PIRP IRP
+    _In_ PIRP           IRP
 ) {
     UNREFERENCED_PARAMETER(deviceObject);
 
@@ -127,7 +123,14 @@ NTSTATUS DriverEntry(
     driverObject->MajorFunction[IRP_MJ_CREATE] = SentinelCreate;
     driverObject->MajorFunction[IRP_MJ_CLOSE] = SentinelClose;
 
-	PsSetCreateProcessNotifyRoutine(sCreateProcessNotifyRoutine, FALSE);
+    NTSTATUS result = PsSetCreateProcessNotifyRoutineEx(sCreateProceesNotifyRoutineEx, FALSE);
+    if (result == STATUS_SUCCESS) {
+        DbgPrint("Process notify routine set successfully.\n");
+    }
+    else {
+		DbgPrint("Failed to set process notify routine. Status: 0x%x\n", result);
+    }
+
     DbgPrint("Listening...\n");
 
     return STATUS_SUCCESS;
