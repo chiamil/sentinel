@@ -46,50 +46,47 @@ NTSTATUS DriverUnload(
     return STATUS_SUCCESS;
 }
 
-NTSTATUS MajorFunctions(PDEVICE_OBJECT deviceObject, PIRP IRP) {
+NTSTATUS SentinelCreate(PDEVICE_OBJECT deviceObject, PIRP IRP) {
     UNREFERENCED_PARAMETER(deviceObject);
-
-    PIO_STACK_LOCATION stackLocation = IoGetCurrentIrpStackLocation(IRP);
-    switch (stackLocation->MajorFunction) {
-    case IRP_MJ_CREATE:
-        DbgPrint("Handle opened.\n");
-        break;
-    case IRP_MJ_CLOSE:
-        DbgPrint("Handle closed.\n");
-        break;
-    
-    default:
-        break;
-    }
+    DbgPrint("Handle opened.\n");
 
     IRP->IoStatus.Status = STATUS_SUCCESS;
     IRP->IoStatus.Information = 0;
     IoCompleteRequest(IRP, IO_NO_INCREMENT);
-    
+    return STATUS_SUCCESS;
+}
+
+NTSTATUS SentinelClose(PDEVICE_OBJECT deviceObject, PIRP IRP) {
+    UNREFERENCED_PARAMETER(deviceObject);
+    DbgPrint("Handle closed.\n");
+
+    IRP->IoStatus.Status = STATUS_SUCCESS;
+    IRP->IoStatus.Information = 0;
+    IoCompleteRequest(IRP, IO_NO_INCREMENT);
     return STATUS_SUCCESS;
 }
 
 // defining our custom IOCTL code handler
-NTSTATUS customIOCTLHandler(
+NTSTATUS CustomIOCTLHandler(
     _In_ PDEVICE_OBJECT deviceObject, 
     _In_ PIRP IRP
 ) {
     UNREFERENCED_PARAMETER(deviceObject);
 
-    PIO_STACK_LOCATION stackLocation = IoGetCurrentIrpStackLocation(IRP);
+    PIO_STACK_LOCATION stack = IoGetCurrentIrpStackLocation(IRP);
     char* kernelMessage = "1337 kernel hackerz"; // message we're sending back to usermode
     SIZE_T messageLength = strlen(kernelMessage) + 1;
 
 	// handling our custom IOCTL code. we're calling it IOCTL_SENTINEL
-    if (stackLocation->Parameters.DeviceIoControl.IoControlCode == IOCTL_SENTINEL) {
-			DbgPrint("IOCTL_SENTINEL (0x%x) received.\n", stackLocation->Parameters.DeviceIoControl.IoControlCode);
+    if (stack->Parameters.DeviceIoControl.IoControlCode == IOCTL_SENTINEL) {
+			DbgPrint("IOCTL_SENTINEL (0x%x) received.\n", stack->Parameters.DeviceIoControl.IoControlCode);
 			DbgPrint("Input received from usermode: %s\n", (char*)IRP->AssociatedIrp.SystemBuffer);
             IRP->IoStatus.Status = STATUS_SUCCESS;
             IRP->IoStatus.Information = messageLength;
     }
     else {
         // if the IOCTL code is unknown, we return an error status
-        DbgPrint("Unknown IOCTL (0x%x) received.\n", stackLocation->Parameters.DeviceIoControl.IoControlCode);
+        DbgPrint("Unknown IOCTL (0x%x) received.\n", stack->Parameters.DeviceIoControl.IoControlCode);
         IRP->IoStatus.Status = STATUS_INVALID_DEVICE_REQUEST;
         IRP->IoStatus.Information = 0;
         IoCompleteRequest(IRP, IO_NO_INCREMENT);
@@ -110,37 +107,25 @@ NTSTATUS DriverEntry(
 ) {
     UNREFERENCED_PARAMETER(registryPath);
 
-	// initializing device and symbolic link names
+    DbgPrint("Driver loaded. Hello, Driver World!\n");
 
+    // initializing device and symbolic link names
     RtlInitUnicodeString(&dev, L"\\Device\\SentinelDriver");
     RtlInitUnicodeString(&sym, L"\\??\\SentinelDriverLink");
-
-    NTSTATUS status = 0;
     
-	// creating device object
+	// creating device object & symbolic link
 	IoCreateDevice(driverObject, 0, &dev, FILE_DEVICE_UNKNOWN, FILE_DEVICE_SECURE_OPEN, FALSE, &driverObject->DeviceObject);
-    if (!NT_SUCCESS(status))
-        DbgPrint("Couldn't create device %wZ.\n", dev);
-    else
-        DbgPrint("Device %wZ created.\n", dev);
-
-    status = IoCreateSymbolicLink(&sym, &dev);
-    if (!NT_SUCCESS(status))
-        DbgPrint("Symbolic link %wZ created.\n", dev);
-    else
-        DbgPrint("Error creating Symbolic link %wZ.\n", dev);
+    IoCreateSymbolicLink(&sym, &dev);
 
 	// routine that executes when the driver is unloaded.
     driverObject->DriverUnload = DriverUnload;
 
 	// handling IO requests from usermode using our custom IOCTL handler.
-    driverObject->MajorFunction[IRP_MJ_DEVICE_CONTROL] = customIOCTLHandler;
+    driverObject->MajorFunction[IRP_MJ_DEVICE_CONTROL] = CustomIOCTLHandler;
 
-    // routines that execute when a handle to my devices link is opened or closed.
-    driverObject->MajorFunction[IRP_MJ_CREATE] = MajorFunctions;
-    driverObject->MajorFunction[IRP_MJ_CLOSE] = MajorFunctions;
-
-    DbgPrint("Driver loaded. Hello, Driver World!\n");
+    // routines that execute when a handle to our devices link is opened or closed.
+    driverObject->MajorFunction[IRP_MJ_CREATE] = SentinelCreate;
+    driverObject->MajorFunction[IRP_MJ_CLOSE] = SentinelClose;
 
 	PsSetCreateProcessNotifyRoutine(sCreateProcessNotifyRoutine, FALSE);
     DbgPrint("Listening...\n");
