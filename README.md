@@ -23,3 +23,7 @@ this project demonstrates basic communication between ring 3 (usermode) and ring
    ```cmd
    sc create Sentinel type= kernel binPath= "C:\path\to\Sentinel.sys"
    sc start Sentinel
+3. **test**:
+   - run `SentinelController.exe` to test ioctl communication.
+   - try opening `notepad.exe`. it should fail to launch.
+   - open dbgview (sysinternals) to see the "process created" logs.
