@@ -1,29 +1,42 @@
 # sentinel
 
-a minimal windows kernel driver and usermode controller proof-of-concept.
+a windows kernel driver for dynamic process blocking.
 
-this project demonstrates basic communication between ring 3 (usermode) and ring 0 (kernel mode) using ioctls, as well as process creation monitoring with blocking capabilities.
-
-## structure
-
-- **sentinel/**: the kernel driver source (`.sys`). handles irps and registers extended process notify routines.
-- **sentinelcontroller/**: the usermode console app (`.exe`). sends requests to the driver.
+this project implements a ring 0 protection system that allows usermode applications to dynamically add process names to a kernel-level blacklist using ioctls.
 
 ## features
 
-- **ioctl communication**: creates a communication channel (`\\.\SentinelDriverLink`) to exchange string messages between user and kernel.
-- **process blocking**: uses `PsSetCreateProcessNotifyRoutineEx` to intercept process creation.
-  - currently configured to block **notepad.exe** from launching by setting `CreationStatus` to `STATUS_ACCESS_DENIED`.
+- **dynamic blacklisting**: add processes to the blocklist at runtime via `IOCTL_SENTINEL_ADD_BLACKLIST`.
+- **process interception**: uses `PsSetCreateProcessNotifyRoutineEx` to monitor and block execution.
+- **thread safety**: implements `FAST_MUTEX` and `LIST_ENTRY` to safely handle concurrent access between the notify routine and ioctl handlers.
+- **memory management**: handles paged pool memory allocation using `ExAllocatePool2`.
+
+## structure
+
+- **sentinel/**: kernel driver (`.sys`). handles the blacklist logic, mutex locking, and process notification callbacks.
+- **sentinelusermode/**: usermode app (`.exe`). interactive console for sending blacklist commands to the driver.
 
 ## usage
 
-1. **build**: compile the solution in visual studio (ensure you have the wdk installed).
-   - **important**: go to project properties -> linker -> command line and add `/INTEGRITYCHECK` for the driver project, otherwise the extended notify routine will fail to register.
-2. **load driver**: enable test signing or use a mapper.
+1. **build**
+   - compile in visual studio (wdk required).
+   - **critical**: ensure `/INTEGRITYCHECK` is set in linker -> command line for the driver, or the notify routine will fail to register.
+
+2. **load**
+   enable test signing or use a mapper, then register the service:
+
    ```cmd
    sc create Sentinel type= kernel binPath= "C:\path\to\Sentinel.sys"
    sc start Sentinel
-3. **test**:
-   - run `SentinelController.exe` to test ioctl communication.
-   - try opening `notepad.exe`. it should fail to launch.
-   - open dbgview (sysinternals) to see the "process created" logs.
+   ```
+
+3. **test**
+   - run `SentinelController.exe` as administrator.
+   - wait for the prompt: `[>] Enter a file path to add to the blacklist:`.
+   - type a process name (e.g., `notepad.exe`) and press enter.
+   - attempt to open that process. access will be denied.
+   - view debug logs using **dbgview** (sysinternals) to see the blocking events.
+
+## warning
+
+this code runs in kernel mode. improper modification of the linked list or mutex logic will cause a system crash (bsod).
