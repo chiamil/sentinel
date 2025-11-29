@@ -23,6 +23,7 @@ this project implements a ring 0 protection system that allows usermode applicat
    - **critical**: ensure `/INTEGRITYCHECK` is set in linker -> command line for the driver, or the notify routine will fail to register.
 
 2. **load**
+
    enable test signing or use a mapper, then register the service:
 
    ```cmd
@@ -30,7 +31,7 @@ this project implements a ring 0 protection system that allows usermode applicat
    sc start Sentinel
    ```
 
-3. **test**
+4. **test**
    - run `SentinelController.exe` as administrator.
    - wait for the prompt: `[>] Enter a file path to add to the blacklist:`.
    - type a process name (e.g., `notepad.exe`) and press enter.
